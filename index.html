@@ -137,6 +137,45 @@ body{display:flex;justify-content:center;min-height:100vh;overscroll-behavior:no
 .rd-shadow{margin-top:10px;font-size:12px;color:var(--faint);min-height:16px;line-height:1.6}
 .rd-more{display:block;margin:6px 16px 20px;width:calc(100% - 32px)}
 
+/* ---------- 口语跟读 ---------- */
+.sp-card{background:#fff;border-radius:20px;padding:20px 18px 18px;margin:0 16px 12px;
+  box-shadow:0 6px 22px rgba(60,50,30,.06)}
+.sp-tag{display:inline-block;font-size:11px;color:#fff;background:linear-gradient(135deg,#2F7B65,#194F40);
+  padding:3px 10px;border-radius:99px;letter-spacing:.08em}
+.sp-mic{width:92px;height:92px;border-radius:50%;border:0;margin:16px auto 0;display:flex;align-items:center;
+  justify-content:center;background:linear-gradient(150deg,#2F7B65,#173F34);color:#fff;font-size:31px;cursor:pointer;
+  touch-action:manipulation;box-shadow:0 12px 26px rgba(25,79,64,.22)}
+.sp-mic.rec{background:linear-gradient(150deg,#C0503C,#8E3527);box-shadow:0 12px 26px rgba(140,50,40,.25);
+  animation:spPulse 1.4s infinite}
+.sp-mic.off{background:#B9B2A4;box-shadow:none;cursor:not-allowed}
+@keyframes spPulse{0%{box-shadow:0 0 0 0 rgba(192,80,60,.40)}70%{box-shadow:0 0 0 16px rgba(192,80,60,0)}
+  100%{box-shadow:0 0 0 0 rgba(192,80,60,0)}}
+.sp-state{text-align:center;margin-top:10px;font-size:12.5px;color:var(--sub);min-height:18px;line-height:1.7}
+.sp-timer{text-align:center;margin-top:2px;font-family:Georgia,serif;font-size:19px;color:var(--green);
+  font-variant-numeric:tabular-nums}
+.sp-result{margin-top:4px;text-align:center}
+.sp-score{font-family:Georgia,serif;font-size:38px;line-height:1.1;color:var(--green)}
+.sp-score.low{color:var(--red)}
+.sp-score small{font-size:12px;color:var(--faint);font-family:inherit;margin-left:3px}
+.sp-verdict{font-size:13px;color:var(--sub);margin-top:3px}
+.sp-miss{margin-top:12px;font-size:12.5px;color:var(--sub);line-height:1.9;text-align:left}
+.sp-miss b{color:var(--red);font-weight:600;font-family:Georgia,serif}
+.sp-heard{margin-top:8px;font-size:12px;color:var(--faint);line-height:1.7;text-align:left;word-break:break-word}
+.sp-segs{display:flex;gap:6px;flex-wrap:wrap;margin-top:11px}
+.sp-segs button{border:1px dashed #D8D0BF;background:#FCFAF4;color:var(--sub);font-family:inherit;font-size:11.5px;
+  padding:5px 9px;border-radius:9px;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;touch-action:manipulation}
+.sp-segs button.on{border-style:solid;background:var(--soft);color:var(--green);font-weight:600}
+.sp-segs button.full{flex:0 0 auto}
+.sp-warn{background:var(--amber-soft);border:1px solid #EBDCBF;color:#7A5A2E;font-size:12px;line-height:1.75;
+  border-radius:12px;padding:10px 12px;margin:0 16px 10px}
+.sp-self{display:flex;gap:8px;margin-top:12px}
+.sp-self button{flex:1;border:1px solid var(--line);background:#FAF7F0;color:var(--sub);font-family:inherit;
+  font-size:12.5px;padding:9px;border-radius:10px;cursor:pointer;touch-action:manipulation}
+.sp-self button.on{background:var(--soft);border-color:#CFE2D6;color:var(--green);font-weight:700}
+.sp-replay{width:100%;margin-top:10px;border:1px solid var(--line);background:#fff;color:var(--green);
+  font-family:inherit;font-size:13px;padding:10px;border-radius:11px;cursor:pointer;touch-action:manipulation}
+
 /* ---------- home ---------- */
 .hero{margin:14px 16px 6px;border-radius:24px;padding:20px 20px 18px;position:relative;overflow:hidden;
   background:linear-gradient(158deg,#28624F 0%,#173F34 68%,#12332B 100%);color:#F5F2E9;
@@ -466,13 +505,15 @@ const CORE = RAW_ENG.concat(RAW_LIFE).map(function(r){
 const BY_W = {};
 CORE.forEach(function(x){ BY_W[x.w] = x; });
 
-/* 大词库：由同目录 words-data.js 提供（window.WORD_BANK），缺失则只用精讲词 */
+/* 大词库：由同目录 words-data.js 提供（window.WORD_BANK / window.WORD_ROOT），缺失则只用精讲词 */
 var BANK = CORE.slice();
 var BANK_LOADED = false;
+var ROOT_T = (typeof window !== "undefined" && window.WORD_ROOT) ? window.WORD_ROOT : [];
+var RAW_BANK = [];
 (function(){
   var rb = (typeof window !== "undefined" && window.WORD_BANK) ? window.WORD_BANK : null;
   if(!rb || !rb.length) return;
-  BANK_LOADED = true;
+  BANK_LOADED = true; RAW_BANK = rb;
   for(var i=0;i<rb.length;i++){
     var r = rb[i], w = r[0];
     if(!w || BY_W[w]) continue;
@@ -482,12 +523,71 @@ var BANK_LOADED = false;
       pos:"", cn:r[2] || "",
       topic:"通用", emoji:"",
       ex:"", excn:"", col:[], roots:[],
+      code:r[5] || "", _rp:null,
       tag: r[3] || "", rank: r[4] || 0, curated:false
     };
     BY_W[w] = o;
     BANK.push(o);
   }
 })();
+
+/* 把一个词的拆解码翻成 [{p,m}]；词干类部件用词库里的释义补注释 */
+function shortCn(cn){
+  var s = String(cn || "").replace(/^(n|v|adj|adv|prep|conj|pron|num|art|int|vt|vi|aux|a)\.\s*/i, "");
+  var cut = s.split(/[，,；;。]/)[0].trim();
+  return cut.slice(0, 8);
+}
+function decParts(code){
+  var out = {parts:[], conf:3, rid:0, stem:false};
+  if(!code) return out;
+  var seg = String(code).split("|");
+  out.conf = +seg[0] || 3;
+  var slot = function(txt, kind){
+    if(!txt || txt === "0") return;
+    txt.split("+").forEach(function(x){
+      if(!x || x === "0") return;
+      if(x.charAt(0) === "r"){
+        var t = ROOT_T[+x.slice(1) - 1];
+        if(!t) return;
+        out.parts.push({p:t[0], m:t[1], kind:kind, rid:(kind==="root" ? (t[3]||0) : 0)});
+        if(kind === "root" && t[3]) out.rid = t[3];
+      }else if(x.charAt(0) === "b"){
+        var row = RAW_BANK[+x.slice(1)];
+        out.parts.push({p:row ? row[0] : "?", m:"词干 · " + (row ? shortCn(row[2]) : ""), kind:"stem"});
+        out.stem = true;
+      }else if(x === "w"){
+        out.parts.push({p:"本源词", m:"不再拆", kind:"base"});
+        out.base = true;
+      }
+    });
+  };
+  slot(seg[1], "pre");
+  slot(seg[2], "root");
+  slot(seg[3], "suf");
+  return out;
+}
+function rootsOf(w){
+  if(w.roots && w.roots.length) return w.roots;
+  if(!w.code) return [];
+  if(!w._rp){
+    w._rp = decParts(w.code);
+    if(w._rp.base && w._rp.parts[0]) w._rp.parts[0].p = w.w;
+  }
+  return w._rp.parts;
+}
+function decConfOf(w){
+  if(!w.code) return 0;
+  if(!w._rp) w._rp = decParts(w.code);
+  return w._rp.conf;
+}
+function decNote(w){
+  if(w.curated || !w.code) return "";
+  var rr = rootsOf(w), c = decConfOf(w);
+  if(rr.length === 2 && rr[0].kind === "stem" && rr[1].kind === "stem") return '<div class="morph-tip">合成词：两个常用词拼起来，按字面就能猜。</div>';
+  if(c === 1) return '<div class="morph-tip">词根原形完全对上，可以直接记。</div>';
+  if(c === 2) return '<div class="morph-tip">算法拆解：词形相近，配合释义一起记。</div>';
+  return '<div class="morph-tip">本源词，没有可拆的常见词根，整词记更快。</div>';
+}
 
 /* =============== 词根库 =============== */
 const ROOTS = [
@@ -534,6 +634,8 @@ function load(){
   if(!d.days) d.days = {};
   if(!d.lifeDone) d.lifeDone = {};
   if(!d.readDone) d.readDone = {};
+  if(!d.speak) d.speak = {};
+  if(!d.dur) d.dur = {};
   if(typeof d.cursor!=="number") d.cursor = 0;
   return d;
 }
@@ -603,13 +705,13 @@ function dayStat(k){
   if(!S.days[k]) S.days[k] = {neu:0, rev:0, ok:0, bad:0};
   return S.days[k];
 }
+function dayActive(d){ return !!d && ((d.neu||0)+(d.rev||0)+(d.spk||0) > 0); }
 function streak(){
   var n = 0, k = today();
   var ds = S.days;
-  if(ds[k] && (ds[k].neu+ds[k].rev>0)) n = 0;
-  var start = (ds[k] && (ds[k].neu+ds[k].rev>0)) ? k : addDays(k,-1);
+  var start = dayActive(ds[k]) ? k : addDays(k,-1);
   var cur = start;
-  while(ds[cur] && (ds[cur].neu+ds[cur].rev>0)){ n++; cur = addDays(cur,-1); }
+  while(dayActive(ds[cur])){ n++; cur = addDays(cur,-1); }
   return n;
 }
 function masteredCount(){
@@ -731,7 +833,8 @@ function renderHome(){
     + '<button class="btn ghost" style="flex:1;padding:11px" onclick="startSession(\'new\')">只背新词</button></div>'
     + '<div class="row" style="margin-top:8px">'
     + '<button class="btn ghost" style="flex:1;padding:11px" onclick="go(\'dict\')">✍️ 默写本</button>'
-    + '<button class="btn ghost" style="flex:1;padding:11px" onclick="go(\'read\')">🎧 读句子</button></div></div>'
+    + '<button class="btn ghost" style="flex:1;padding:11px" onclick="go(\'read\')">🎧 读句子</button></div>'
+    + '<button class="btn ghost" style="margin-top:8px;padding:11px" onclick="goSpeak()">🎤 口语跟读 · 把整句说出来</button></div>'
 
     + hm;
 }
@@ -770,25 +873,137 @@ function toggleLife(){
 }
 
 /* =============== 词根页 =============== */
+var ROOT_FAMS = [], ROOT_FAM_BY = {};
+(function(){
+  if(!BANK_LOADED) return;
+  for(var i=0;i<RAW_BANK.length;i++){
+    var code = RAW_BANK[i][5];
+    if(!code) continue;
+    var seg = code.split("|"), mid = seg[2] || "0";
+    if(mid.charAt(0) !== "r") continue;
+    var t = ROOT_T[+mid.slice(1) - 1];
+    if(!t || t[2] !== 1 || !t[3]) continue;
+    var g = t[3];
+    if(!ROOT_FAM_BY[g]){ ROOT_FAM_BY[g] = {g:g, form:t[0], m:t[1], n:0, words:[]}; ROOT_FAMS.push(ROOT_FAM_BY[g]); }
+    var f = ROOT_FAM_BY[g];
+    f.n++;
+    if(f.words.length < 5) f.words.push(RAW_BANK[i][0]);
+  }
+  /* 同一词根的不同词形（spec / spect / spic）都进 forms，搜索时都能命中 */
+  ROOT_T.forEach(function(t){
+    if(t[2] !== 1 || !t[3]) return;
+    var fam = ROOT_FAM_BY[t[3]];
+    if(!fam) return;
+    fam.forms = fam.forms || [fam.form];
+    if(fam.forms.indexOf(t[0]) < 0) fam.forms.push(t[0]);
+  });
+  ROOT_FAMS.sort(function(a,b){ return b.n - a.n; });
+})();
+var rootQ = "", rootLimit = 60;
+
+/* 词干族：work → worker / working / workable，直接串起来 */
+var STEM_MAP = {};
+(function(){
+  if(!BANK_LOADED) return;
+  for(var i=0;i<RAW_BANK.length;i++){
+    var code = RAW_BANK[i][5];
+    if(!code) continue;
+    var segs = code.split("|");
+    /* 合成词两边都是词干，不算同一词干族，跳过 */
+    if(segs[1].charAt(0) === "b") continue;
+    var mid = segs[2] || "0";
+    if(mid.charAt(0) !== "b") continue;
+    var k = +mid.slice(1);
+    if(!STEM_MAP[k]) STEM_MAP[k] = [];
+    if(STEM_MAP[k].length < 8) STEM_MAP[k].push(RAW_BANK[i][0]);
+  }
+})();
+function famWords(w){
+  var c = w.code;
+  if(!c) return null;
+  var seg = c.split("|"), mid = seg[2] || "0";
+  if(mid.charAt(0) === "b"){
+    var k = +mid.slice(1), sib = (STEM_MAP[k] || []).filter(function(x){ return x !== w.w; });
+    return sib.length ? {label:"同族词（词干 "+RAW_BANK[k][0]+"）", words:sib} : null;
+  }
+  if(mid.charAt(0) === "r"){
+    var t = ROOT_T[+mid.slice(1) - 1];
+    if(!t || !t[3]) return null;
+    var fam = ROOT_FAM_BY[t[3]];
+    if(!fam) return null;
+    var ws = fam.words.filter(function(x){ return x !== w.w; }).slice(0, 7);
+    return ws.length ? {label:"同根词（"+fam.form+"）", words:ws} : null;
+  }
+  return null;
+}
+function onRootQ(v){ rootQ = v; rootLimit = 60; render(); var inp = document.getElementById("rq"); if(inp){ inp.focus(); inp.setSelectionRange(v.length, v.length); } }
+function moreRoot(){ rootLimit += 80; var v = document.getElementById("view"), st0 = v.scrollTop; render(); v.scrollTop = st0; }
+
 function renderRoots(){
   var h = '<div class="sec">一个词根，串起一串词</div><div class="root-grid">';
   ROOTS.forEach(function(r,i){
     h += '<div class="root-card" data-letter="'+r.k.charAt(0).toUpperCase()+'" onclick="openRoot('+i+')">'
       + '<b>'+esc(r.k)+'</b><small>'+esc(r.m)+'</small>'
-      + '<i>'+r.fam.length+' 个同族词</i></div>';
+      + '<i>'+r.fam.length+' 个精讲词</i></div>';
   });
   h += '</div>';
+
+  if(BANK_LOADED && ROOT_FAMS.length){
+    var q = rootQ.trim().toLowerCase();
+    var list = ROOT_FAMS.filter(function(f){
+      if(!q) return true;
+      if(f.m.indexOf(rootQ.trim()) >= 0) return true;
+      return (f.forms || [f.form]).some(function(fm){ return fm.toLowerCase().indexOf(q) >= 0; });
+    });
+    h += '<div class="sec" style="padding:22px 20px 8px">全库词根 · '+ROOT_FAMS.length+' 组'
+      + '<span style="font-size:11px;color:var(--faint);font-weight:400">　按词数排序</span></div>'
+      + '<div class="search"><span style="color:var(--faint)">🔍</span><input id="rq" placeholder="搜词根或含义，如 spect / 看" value="'+esc(rootQ)+'" oninput="onRootQ(this.value)"></div>'
+      + '<div style="padding:0 16px 6px;font-size:11.5px;color:var(--faint)">词库 5 万词已全部拆过一遍，下面是出现最多的词根；点进去看同根词。</div>'
+      + '<div class="root-grid" style="padding-top:10px">';
+    list.slice(0, rootLimit).forEach(function(f){
+      h += '<div class="root-card" onclick="openRootG('+f.g+')">'
+        + '<b>'+esc(f.form)+'</b><small>'+esc(f.m)+'</small>'
+        + '<i>'+f.n+' 词 · '+esc(f.words.slice(0,2).join(" / "))+'</i></div>';
+    });
+    h += '</div>';
+    if(!list.length) h += '<div class="card"><div class="note">没找到这个词根，换个拼法试试。</div></div>';
+    if(list.length > rootLimit) h += '<button class="btn ghost" style="margin:12px 16px" onclick="moreRoot()">显示更多（还有 '+(list.length-rootLimit)+' 组）</button>';
+  }
+
   h += '<div class="card" style="margin-top:14px"><div class="card-h"><h3>怎么用词根记</h3></div>'
-     + '<div class="note">1. 先认出词根的意思 → 2. 再看前后缀改了什么（方向、否定、词性）→ 3. 拼出一个“合理猜测” → 4. 用例句验证。<br><br>'
-     + '比如 <b>in-（向内）+ spect（看）+ -ion</b> = 向内看 = 检查；<b>super-（在上）+ vis（看）</b> = 从上面看 = 监理。工程里的 inspection、supervision 一次就记住了。</div></div>';
+     + '<div class="note">1. 先认出词根的意思 → 2. 再看前后缀改了什么（方向、否定、词性）→ 3. 拼出一个“合理猜测” → 4. 用释义验证。<br><br>'
+     + '比如 <b>in-（向内）+ spect（看）+ -ion</b> = 向内看 = 检查；<b>super-（在上）+ vis（看）</b> = 从上面看 = 监理。工程里的 inspection、supervision 一次就记住了。<br><br>'
+     + '5 万词里的拆解是算法做的：词根原形对得上的标「精确」，变形对上的标「算法拆解」，实在拆不动的标的「本源词」。别把算法拆解当成词源课，它的用处是帮你在没背过的词里认出一块熟悉的部分。</div></div>';
   return h;
 }
+
+function openRootG(g){
+  var f = ROOT_FAM_BY[g];
+  if(!f) return;
+  var words = BANK.filter(function(w){
+    var rr = rootsOf(w);
+    return rr.some(function(m){ return m.rid === g; });
+  });
+  var h = '<div class="sheet-handle"></div>'
+    + '<div style="text-align:center"><div class="serif" style="font-size:30px;color:var(--green)">'+esc(f.form)+'</div>'
+    + '<div style="font-size:13px;color:var(--sub);margin-top:6px">'+esc(f.m)+' · 词库里有 '+words.length+' 个词带它</div></div>'
+    + '<div class="sec" style="padding:18px 0 6px">同根词（按词频排）</div>';
+  words.slice(0, 80).forEach(function(w){
+    h += '<div class="wrow" onclick="closeSheet();openWord(\''+w.w+'\')">'
+      + '<div class="l"><b>'+esc(w.w)+'</b><small>'+esc(w.cn.slice(0, 34))+'</small></div>'
+      + '<span class="badge '+((S.w[w.w]||{}).state || "new")+'">'+((S.w[w.w]&&S.w[w.w].state==="mastered")?"已掌握":"")+'</span></div>';
+  });
+  if(words.length > 80) h += '<div class="note">只列前 80 个。想找别的，去「按单词」搜。</div>';
+  h += '<button class="btn ghost" style="margin-top:16px" onclick="closeSheet()">收起</button>';
+  showSheet(h);
+}
+
 
 function openRoot(i){
   var r = ROOTS[i];
   var related = CORE.filter(function(w){
     var key = r.k.split(" / ")[0].toLowerCase();
-    return w.roots.some(function(m){ return m.p.toLowerCase().indexOf(key)>=0 || key.indexOf(m.p.toLowerCase())>=0; });
+    return rootsOf(w).some(function(m){ return m.p.toLowerCase().indexOf(key)>=0 || key.indexOf(m.p.toLowerCase())>=0; });
   });
   var h = '<div class="sheet-handle"></div>'
     + '<div style="text-align:center"><div class="serif" style="font-size:30px;color:var(--green)">'+esc(r.k)+'</div>'
@@ -874,12 +1089,22 @@ function openWord(name){
     + '<div class="wword serif">'+esc(w.w)+'</div><div class="wipa">'+esc(w.ipa)+'</div>'
     + '<button class="speak" onclick="speakWord(\''+w.w+'\')">🔊 听发音</button></div>'
     + '<div class="zh">'+esc(w.cn)+'<div class="zh-sub">'+esc(w.pos||"")+' · '+tagTxt+'</div></div>';
-  if(w.roots.length){
+  var rr = rootsOf(w);
+  if(rr.length){
     h += '<div class="morph-box"><div class="morph-line">';
-    w.roots.forEach(function(m){
+    rr.forEach(function(m, i){
+      if(i) h += '<span class="op">+</span>';
       h += '<span class="morph"><b>'+esc(m.p)+'</b><small>'+esc(m.m)+'</small></span>';
     });
-    h += '</div></div>';
+    h += '</div>' + decNote(w) + '</div>';
+    var fam = famWords(w);
+    if(fam){
+      h += '<div style="margin-top:10px"><div style="font-size:11.5px;color:var(--faint);margin-bottom:6px">'+esc(fam.label)+'</div>';
+      fam.words.forEach(function(x){
+        h += '<span class="chip" onclick="closeSheet();openWord(\''+x+'\')">'+esc(x)+'</span>';
+      });
+      h += '</div>';
+    }
   }
   if(w.ex){
     h += '<div class="ex-box"><p>'+exHi(w)+'</p><small>'+esc(w.excn)+'</small>'
@@ -940,6 +1165,13 @@ function renderMe(){
     + '<div class="note">词库共 '+total+' 词'+(BANK_LOADED?"（大词库已加载）":"（大词库未加载，仅精讲 "+CORE.length+" 词）")
     + '，其中精讲词 '+CORE.length+' 个（带词根拆解与例句）。已掌握的口径是间隔 ≥ 21 天。</div></div>';
 
+  h += '<div class="sec">口语跟读</div><div class="card">'
+    + '<div class="stat3"><div><b>'+Object.keys(S.speak).length+'</b><span>练过的句子</span></div>'
+    + '<div><b>'+spAvg()+'</b><span>平均最好分</span></div>'
+    + '<div><b>'+(dayStat().spk||0)+'</b><span>今日跟读</span></div></div>'
+    + '<div class="note">评分只看「整句的词说没说到、顺序对不对」，不评语调。低于 70 分的句子会自动进「只练弱句」清单。</div>'
+    + '<button class="btn ghost" style="margin-top:12px;padding:11px" onclick="goSpeak()">去练口语跟读</button></div>';
+
   h += '<div class="sec">每日节奏</div><div class="card">'
     + '<div class="set-row"><div class="t">每天新词量<small>按你现在的四级基础，15 个左右最稳</small></div>'
     + '<div class="seg">'+[5,10,15,20].map(function(n){return '<button class="'+(S.set.newPerDay===n?"on":"")+'" onclick="setNew('+n+')">'+n+'</button>';}).join("")+'</div></div>'
@@ -954,7 +1186,8 @@ function renderMe(){
     + '<b>四档评分</b>：忘记 → 1 天后重来；有点印象 → 明天再见；记得 → 间隔乘 EF；很熟 → 间隔乘得更快。<br><br>'
     + '<b>会话内重排</b>：当轮答错的词会立刻排到本轮队尾，再来一遍“看卡 + 默写”，当天就补上漏洞。<br><br>'
     + '<b>默写本</b>接的是同一套排程：默对按「记得」推进，默错按「忘了」回到 1 天后，所以写一遍和背一遍效果是叠加的。<br><br>'
-    + '<b>整句阅读</b>把例句整句读出来（正常 / 慢速 / 循环），标记已读只影响阅读进度，不会改动记忆曲线。</div></div>';
+    + '<b>整句阅读</b>把例句整句读出来（正常 / 慢速 / 循环），标记已读只影响阅读进度，不会改动记忆曲线。<br><br>'
+    + '<b>口语跟读</b>：先听标准音 → 按下麦克风整句说出来 → 浏览器把语音转成文字，再按词序和目标句比对，漏了哪个词就标出来；识别不了的浏览器改用「录音 + 时长匹配 + 自评三档」。分数 ≥ 80 自动把该句记为已读，跟读次数还会计入连续天数。</div></div>';
 
   h += '<div class="card"><button class="btn ghost" onclick="resetAll()">清空全部学习记录</button></div>';
   return h;
@@ -964,7 +1197,7 @@ function setRatio(r){ S.set.engRatio=r; save(); render(); }
 function setRate(r){ S.set.rate=r; save(); render(); }
 function resetAll(){
   if(confirm("确认清空所有学习记录？此操作不可恢复。")){
-    S = {w:{},days:{},lifeDone:{},readDone:{},set:S.set,cursor:0}; save(); render(); closeSheet();
+    S = {w:{},days:{},lifeDone:{},readDone:{},speak:{},dur:{},set:S.set,cursor:0}; save(); render(); closeSheet();
   }
 }
 /* =============== 学习会话 =============== */
@@ -1044,7 +1277,7 @@ function prepare(){
 function pickType(w){
   var s = S.w[w.w] || {};
   var list = ["meaning","dict","cloze"];
-  if(w.roots && w.roots.length>=2) list.push("roots");
+  if(rootsOf(w).length>=2) list.push("roots");
   if(s.state==="mastered"){ list.push("dict"); list.push("dict"); }
   var t = list[Math.floor(Math.random()*list.length)];
   if(t==="cloze" && !canBlank(w)) t="meaning";
@@ -1166,7 +1399,7 @@ function exHi(w){
 
 function morphRow(w, mode){
   var h = '<div class="morph-line">';
-  w.roots.forEach(function(m, i){
+  rootsOf(w).forEach(function(m, i){
     if(i) h += '<span class="op">+</span>';
     h += '<span class="morph"><b>'+esc(m.p)+'</b><small>'+esc(m.m)+'</small></span>';
   });
@@ -1219,9 +1452,13 @@ function learnHTML(w){
     h += '<div class="ex-box" style="margin-top:18px"><p>'+exHi(w)+'</p><small>'+esc(w.excn)+'</small>'
       + '<button class="speak" style="margin-top:10px" onclick="speakSent(\''+w.ex.replace(/'/g,"\\'")+'\')">🔊 整句朗读</button></div>';
   }
-  if(w.roots.length){
+  if(rootsOf(w).length){
+    var dc = w.curated ? 1 : decConfOf(w);
     h += '<div class="morph-box">'+morphRow(w, fresh ? "guess" : "full")
-      + '<div class="morph-tip">先记词根，再拼词义 —— 下次遇到没见过的词也能猜个七八分</div></div>';
+      + (dc >= 2
+          ? '<div class="morph-tip">'+(dc === 3 ? '这个词是本源词，没有可拆的常见词根 —— 用画面和例句记它。' : '算法拆解：结构对得上，个别词义要配合释义看。')+'</div>'
+          : '<div class="morph-tip">先记词根，再拼词义 —— 下次遇到没见过的词也能猜个七八分</div>')
+      + '</div>';
   }
   var zhBlock = '<div class="zh">'+esc(w.cn)+'<div class="zh-sub">'+esc(meta)+'</div></div>';
   h += fresh
@@ -1309,7 +1546,7 @@ function feedbackHTML(q, w){
     + '<div class="wipa">'+esc([w.ipa, w.pos, w.curated ? w.topic : tagLabel(w.tag)].filter(Boolean).join(" · "))+'</div></div>'
     + '<button class="speak" style="margin:0" onclick="speakWord(\''+w.w+'\')">🔊</button></div>'
     + '<div style="font-size:15px;font-weight:600;color:var(--green);margin-top:12px">'+esc(w.cn)+'</div>';
-  if(w.roots.length) h += '<div class="morph-box">'+morphRow(w, "none")+'</div>';
+  if(rootsOf(w).length) h += '<div class="morph-box">'+morphRow(w, "none")+decNote(w)+'</div>';
   if(w.ex) h += '<div class="ex-box" style="margin-top:12px"><p>'+exHi(w)+'</p><small>'+esc(w.excn)+'</small>'
     + '<button class="speak" style="margin-top:8px" onclick="speakSent(\''+w.ex.replace(/'/g,"\\'")+'\')">🔊 整句朗读</button></div>';
   h += '</div>';
@@ -1551,7 +1788,7 @@ function rdHi(w){
 }
 function rdDone(){ return allSent().filter(function(x){ return S.readDone[x.w]; }).length; }
 function setRdFilter(v){ rd.filter = v; rd.idx = 0; render(); }
-function setRdMode(v){ rd.mode = v; render(); }
+function setRdMode(v){ if(v!=="speak") spAbort(); rd.mode = v; render(); }
 function rdReveal(k){ rd.open[k] = true; render(); }
 
 function rdSay(slow){
@@ -1664,12 +1901,16 @@ function renderRead(){
   var list = readList();
   var total = allSent().length, done = rdDone();
   if(rd.idx >= list.length) rd.idx = Math.max(0, list.length-1);
+  var speak = (rd.mode==="speak");
 
-  var h = '<div class="rd-head"><h2>整句阅读</h2>'
-    + '<p>不是逐词背，是把整句读顺：听整句 → 看中文 → 跟读。句子熟了，词才会用。</p>'
+  var h = '<div class="rd-head"><h2>'+(speak ? "口语跟读" : "整句阅读")+'</h2>'
+    + '<p>'+(speak
+        ? "听一遍标准句 → 按麦克风说一遍 → 立刻比对：漏了哪些词、节奏差多少。能复述整句，词才算真会用。"
+        : "不是逐词背，是把整句读顺：听整句 → 看中文 → 跟读。句子熟了，词才会用。")+'</p>'
     + '<div style="display:flex;align-items:center;gap:10px;margin-top:12px">'
-    + '<div class="dm-bar" style="flex:1"><i style="width:'+Math.round(done/total*100)+'%"></i></div>'
-    + '<span style="font-size:12px;color:var(--faint);white-space:nowrap">已读 '+done+' / '+total+' 句</span></div>'
+    + '<div class="dm-bar" style="flex:1"><i style="width:'+Math.round((speak?spDone():done)/total*100)+'%"></i></div>'
+    + '<span style="font-size:12px;color:var(--faint);white-space:nowrap">'
+    + (speak ? ('已跟读 '+spDone()+' / '+total+' 句') : ('已读 '+done+' / '+total+' 句'))+'</span></div>'
     + '<div class="segtabs" style="margin-top:12px">'
     + [["all","全部"],["工程","工程"],["日常","日常"],["未读","未读"]].map(function(o){
         return '<button class="'+(rd.filter===o[0]?"on":"")+'" onclick="setRdFilter(\''+o[0]+'\')">'+o[1]+'</button>';
@@ -1677,10 +1918,13 @@ function renderRead(){
     + '</div></div>';
 
   h += '<div class="dm-wrap" style="padding-bottom:6px"><div class="dm-opts" style="justify-content:flex-start">'
-    + '<button class="'+(rd.mode==="focus"?"on":"")+'" onclick="setRdMode(\'focus\')">逐句精读</button>'
+    + '<button class="'+(rd.mode==="focus"?"on":"")+'" onclick="setRdMode(\'focus\')">听句精读</button>'
+    + '<button class="'+(rd.mode==="speak"?"on":"")+'" onclick="setRdMode(\'speak\')">🎤 口语跟读</button>'
     + '<button class="'+(rd.mode==="all"?"on":"")+'" onclick="setRdMode(\'all\')">全部句子</button>'
-    + '<button onclick="'+(rd.play?"rdStopAll()":"rdPlayAll()")+'">'+(rd.play?"⏹ 停止连读":"▶ 连读这一类")+'</button>'
+    + (speak ? '' : '<button onclick="'+(rd.play?"rdStopAll()":"rdPlayAll()")+'">'+(rd.play?"⏹ 停止连读":"▶ 连读这一类")+'</button>')
     + '</div></div>';
+
+  if(speak) return h + renderSpeakBody(list);
 
   if(!list.length){
     h += '<div class="rd-card"><div class="note">这一类暂时没有句子了。点「全部」看所有例句，或者去首页学新词。</div></div>';
@@ -1706,6 +1950,349 @@ function renderRead(){
   return h;
 }
 
+/* =============== 口语跟读 =============== */
+var sp = {phase:"idle", seg:0, weak:false, shadow:false, score:null, miss:[], heard:"", self:0,
+          timeScore:null, durRec:0, url:null, mr:null, stream:null, sr:null, tick:null, t0:0,
+          engine:null, msg:"", au:null};
+
+function spSR(){ return (typeof window!=="undefined") ? (window.SpeechRecognition || window.webkitSpeechRecognition || null) : null; }
+function spMedia(){ return (typeof navigator!=="undefined" && navigator.mediaDevices) ? navigator.mediaDevices : null; }
+function spEngine(){
+  if(spSR()) return "asr";
+  if(window.MediaRecorder && spMedia() && spMedia().getUserMedia) return "rec";
+  return "none";
+}
+function spSegs(s){
+  var out = [], buf = "";
+  for(var i=0;i<s.length;i++){
+    buf += s.charAt(i);
+    if(/[,;:.!?]/.test(s.charAt(i))){
+      var t = buf.trim();
+      if(t) out.push(t);
+      buf = "";
+    }
+  }
+  if(buf.trim()) out.push(buf.trim());
+  return out.length ? out : [s];
+}
+function spWords(s){
+  return String(s).toLowerCase().replace(/[^a-z'\s]/g," ").split(/\s+/).filter(Boolean);
+}
+function spCompare(said, target){
+  var a = spWords(said), b = spWords(target), i = 0, miss = [], hit = 0;
+  for(var j=0;j<b.length;j++){
+    var k = -1;
+    for(var t=i;t<a.length;t++){ if(a[t]===b[j]){ k = t; break; } }
+    if(k>=0){ hit++; i = k+1; } else miss.push(b[j]);
+  }
+  return {score: b.length ? Math.round(hit/b.length*100) : 0, miss: miss, n: b.length};
+}
+function spLastScore(w){
+  var r = S.speak[w.w];
+  if(!r) return null;
+  return typeof r.last==="number" ? r.last : (typeof r.best==="number" ? r.best : null);
+}
+function spIsWeak(w){ var v = spLastScore(w); return typeof v==="number" && v < 70; }
+function spList(){
+  var out = readList();
+  if(sp.weak) out = out.filter(spIsWeak);
+  return out;
+}
+function spDone(){ return allSent().filter(function(x){ return S.speak[x.w]; }).length; }
+function spWeakCount(){ return allSent().filter(spIsWeak).length; }
+function spAvg(){
+  var v = allSent().map(function(x){ return S.speak[x.w] ? S.speak[x.w].best : null; })
+    .filter(function(x){ return typeof x==="number"; });
+  if(!v.length) return 0;
+  return Math.round(v.reduce(function(a,b){ return a+b; },0)/v.length);
+}
+function spTarget(w){
+  var segs = spSegs(w.ex);
+  if(sp.seg>0 && segs[sp.seg-1]) return segs[sp.seg-1];
+  return w.ex;
+}
+function spSetSeg(i){
+  if(sp.phase==="rec") return;
+  sp.seg = i; sp.phase = "idle"; sp.score = null; sp.miss = []; render();
+}
+function spShadowToggle(){
+  sp.shadow = !sp.shadow;
+  if(sp.shadow && spEngine()==="rec") alert("影子跟读：点麦克风后会一边放标准音、一边录你的声音。建议戴耳机，不然喇叭声会被录进去。");
+  render();
+}
+
+function spStopTimer(){ if(sp.tick){ clearInterval(sp.tick); sp.tick = null; } }
+function spTimerStart(max, onMax){
+  spStopTimer();
+  var t0 = sp.t0;
+  sp.tick = setInterval(function(){
+    var el = document.getElementById("spTimer");
+    var s = (Date.now()-t0)/1000;
+    if(el) el.textContent = s.toFixed(1)+" s";
+    if(max && s>max){ spStopTimer(); if(onMax) onMax(); }
+  }, 100);
+}
+function spAbort(){
+  spStopTimer();
+  if(sp.sr){ try{ sp.sr.abort(); }catch(e){} sp.sr = null; }
+  if(sp.mr && sp.mr.state === "recording"){ try{ sp.mr.onstop = null; sp.mr.stop(); }catch(e){} }
+  sp.mr = null;
+  if(sp.stream){ try{ sp.stream.getTracks().forEach(function(t){ t.stop(); }); }catch(e){} sp.stream = null; }
+  sp.phase = "idle";
+}
+function spMicMsg(e){
+  var n = (e && (e.name || e.code)) || "";
+  if(/NotAllowed|Permission/i.test(n)) return "麦克风被拒绝了。iPhone 上：设置 → Safari 浏览器 → 麦克风 → 允许；然后在页面里再点一次。";
+  if(/Security|NotSupported|undefined/i.test(n) || !window.isSecureContext) return "这个打开方式不给用麦克风。用 https 的网址打开（比如 GitHub Pages 那个）才能录音；本地双击 html 只能听、不能录。";
+  if(/NotFound|Devices/i.test(n)) return "没找到麦克风设备。";
+  return "麦克风启动失败：" + (e && e.message ? e.message : "未知原因");
+}
+
+function spStart(){
+  if(sp.phase === "rec"){ spStopRec(); return; }
+  var list = spList();
+  if(rd.idx >= list.length) rd.idx = 0;
+  var w = list[rd.idx];
+  if(!w) return;
+  sp.score = null; sp.miss = []; sp.heard = ""; sp.self = 0; sp.timeScore = null; sp.msg = "";
+  sp.engine = spEngine();
+  if(sp.engine === "none"){
+    sp.msg = "这个浏览器既没有语音识别、也没有录音接口。可以先用「听标准」听两遍，自己大声读，再点「慢速」对照。";
+    render(); return;
+  }
+  if(sp.engine === "asr") return spStartASR(w);
+  return spStartRec(w);
+}
+
+function spStartASR(w){
+  var target = spTarget(w);
+  var SR = spSR();
+  try{
+    var r = new SR();
+    r.lang = "en-US"; r.interimResults = false; r.maxAlternatives = 1; r.continuous = false;
+    sp.sr = r;
+    sp.phase = "rec"; sp.t0 = Date.now();
+    r.onresult = function(ev){
+      var said = "";
+      try{ said = ev.results[0][0].transcript || ""; }catch(e){}
+      spStopTimer(); sp.sr = null;
+      var res = spCompare(said, target);
+      spSave(w, res.score, res.miss, said, null);
+    };
+    r.onerror = function(ev){
+      spStopTimer(); sp.sr = null; sp.phase = "idle";
+      sp.msg = spMicMsg({ name:(ev && ev.error) || "" });
+      render();
+    };
+    r.onend = function(){
+      spStopTimer();
+      if(sp.phase === "rec"){ sp.phase = "idle"; sp.msg = "没听清（可能太吵或没开麦）。再点一次，靠近手机说。"; render(); }
+    };
+    r.start();
+    spTimerStart(15, function(){ try{ r.stop(); }catch(e){} });
+    render();
+  }catch(e){
+    sp.phase = "idle"; sp.msg = "语音识别启动失败：" + (e && e.message ? e.message : "未知原因"); render();
+  }
+}
+
+function spStartRec(w){
+  var target = spTarget(w);
+  var md = spMedia();
+  md.getUserMedia({ audio:true }).then(function(stream){
+    sp.stream = stream;
+    var mr = new window.MediaRecorder(stream);
+    var chunks = [];
+    sp.mr = mr;
+    mr.ondataavailable = function(e){ if(e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = function(){
+      try{ stream.getTracks().forEach(function(t){ t.stop(); }); }catch(e){}
+      sp.stream = null; sp.mr = null;
+      spStopTimer();
+      var dur = (Date.now()-sp.t0)/1000;
+      sp.durRec = dur;
+      if(sp.url){ try{ URL.revokeObjectURL(sp.url); }catch(e){} }
+      try{
+        sp.url = URL.createObjectURL(new window.Blob(chunks, { type:(chunks[0] && chunks[0].type) || "audio/webm" }));
+      }catch(e){ sp.url = null; }
+      var ref = (sp.seg===0 && S.dur && S.dur[w.w]) ? S.dur[w.w] : (spWords(target).length*0.34 + 0.35);
+      sp.timeScore = Math.round(Math.min(dur, ref)/Math.max(dur, ref)*100);
+      sp.phase = "review";
+      render();
+    };
+    sp.t0 = Date.now();
+    mr.start();
+    sp.phase = "rec";
+    spTimerStart(30, function(){ spStopRec(); });
+    render();
+    if(sp.shadow) spPlayRef(target, S.set.rate || 0.9);
+  }).catch(function(e){
+    sp.phase = "idle"; sp.msg = spMicMsg(e); render();
+  });
+}
+function spStopRec(){
+  if(sp.mr && sp.mr.state === "recording"){ try{ sp.mr.stop(); }catch(e){} return; }
+  if(sp.sr){ try{ sp.sr.stop(); }catch(e){} }
+}
+function spPlayRef(text, rate){
+  var list = spList(), w = list[rd.idx];
+  var whole = !!w && text === w.ex;
+  var t0 = Date.now();
+  tts(text, rate || S.set.rate || 0.9, function(){
+    if(!w || !whole) return;
+    var d = (Date.now()-t0)/1000;
+    if(d > 0.4 && d < 30){ S.dur = S.dur || {}; S.dur[w.w] = Math.round(d*10)/10; save(); }
+  });
+}
+function spPlayMine(){
+  if(!sp.url) return;
+  try{
+    if(!sp.au) sp.au = new window.Audio();
+    sp.au.src = sp.url;
+    sp.au.play().catch(function(){});
+  }catch(e){}
+}
+function spSelf(v){
+  var list = spList(); var w = list[rd.idx];
+  if(!w || sp.phase !== "review") return;
+  sp.self = v;
+  var map = [40,70,100];
+  var score = Math.round((sp.timeScore||0)*0.6 + map[v]*0.4);
+  spSave(w, score, [], "", v);
+}
+function spSave(w, score, miss, heard, self){
+  sp.phase = "done"; sp.score = score; sp.miss = miss || []; sp.heard = heard || "";
+  if(typeof self === "number") sp.self = self;
+  var rec = S.speak[w.w] || { n:0, best:0 };
+  rec.n = (rec.n||0) + 1;
+  rec.best = Math.max(rec.best||0, score);
+  rec.last = score;
+  S.speak[w.w] = rec;
+  var ds = dayStat(); ds.spk = (ds.spk||0) + 1;
+  if(score >= 80) S.readDone[w.w] = 1;
+  save(); render();
+}
+function spReset(){ if(sp.phase === "rec") spAbort(); sp.phase = "idle"; sp.score = null; sp.miss = []; sp.heard = ""; sp.self = 0; sp.timeScore = null; sp.msg = ""; render(); }
+function spNext(){
+  var list = spList();
+  if(rd.idx < list.length-1){
+    spAbort(); sp.phase = "idle"; sp.score = null; sp.miss = []; sp.heard = ""; sp.self = 0; sp.timeScore = null;
+    rd.idx++; render();
+  }else{
+    alert("这一类句子已经到最后一句了。可以切到「全部」再练一遍，或者把「只练弱句」关掉看看别的。");
+  }
+}
+function spPrev(){
+  if(rd.idx > 0){
+    spAbort(); sp.phase = "idle"; sp.score = null; sp.miss = []; sp.heard = ""; sp.self = 0; sp.timeScore = null;
+    rd.idx--; render();
+  }
+}
+function spWeakToggle(){ spAbort(); sp.weak = !sp.weak; rd.idx = 0; sp.phase = "idle"; render(); }
+function goSpeak(){ spAbort(); rd.mode = "speak"; rd.idx = 0; sp.phase = "idle"; go("read"); }
+function spVerdict(s){
+  if(s >= 90) return "很稳，像母语节奏了";
+  if(s >= 75) return "基本顺，个别词再抠一下";
+  if(s >= 55) return "意思到了，词尾和节奏还差一点";
+  return "先点「慢速」听两遍，再按段跟读";
+}
+
+function renderSpeakBody(list){
+  if(!list.length){
+    return '<div class="rd-card"><div class="note">'
+      + (sp.weak ? '还没有弱句 —— 先跟读几句，得分低于 70 的句子会自动进这里。' : '这一类暂时没有句子。')
+      + '</div></div>';
+  }
+  if(rd.idx >= list.length) rd.idx = Math.max(0, list.length-1);
+  var w = list[rd.idx];
+  var segs = spSegs(w.ex);
+  var target = spTarget(w);
+  var eng = spEngine();
+  var hist = S.speak[w.w];
+  var weakN = spWeakCount();
+
+  var h = '';
+  if(sp.weak || weakN) {
+    h += '<div class="dm-wrap" style="padding-bottom:4px"><div class="dm-opts" style="justify-content:flex-start">'
+      + '<button class="'+(sp.weak?"on":"")+'" onclick="spWeakToggle()">只练弱句'+(weakN?" · "+weakN:"")+'</button>'
+      + (eng==="rec" ? '<button class="'+(sp.shadow?"on":"")+'" onclick="spShadowToggle()">影子跟读</button>' : '')
+      + '</div></div>';
+  }else if(eng==="rec"){
+    h += '<div class="dm-wrap" style="padding-bottom:4px"><div class="dm-opts" style="justify-content:flex-start">'
+      + '<button class="'+(sp.shadow?"on":"")+'" onclick="spShadowToggle()">影子跟读</button></div></div>';
+  }
+
+  h += '<div class="sp-card">'
+    + '<div style="display:flex;justify-content:space-between;align-items:center">'
+    + '<span class="sp-tag">跟读 · 第 '+(rd.idx+1)+' / '+list.length+' 句</span>'
+    + '<span style="font-size:11.5px;color:var(--faint)">'+(eng==="asr" ? "识别打分" : eng==="rec" ? "录音对比" : "仅听读")+'</span></div>'
+    + '<p class="rd-en" style="margin-top:12px">'+rdHi(w)+'</p>'
+    + '<div class="rd-cn">'+esc(w.excn)+'</div>'
+    + '<div class="rd-tools">'
+    + '<button onclick="spPlayRef(\''+jsq(target)+'\')">🔊 听标准</button>'
+    + '<button onclick="spPlayRef(\''+jsq(target)+'\',0.62)">🐢 慢速</button>'
+    + '<button onclick="rdMark(\''+w.w+'\')">'+(S.readDone[w.w] ? "✓ 已读" : "标记已读")+'</button>'
+    + '</div>';
+
+  if(segs.length > 1){
+    h += '<div class="sp-segs">'
+      + '<button class="full '+(sp.seg===0?"on":"")+'" onclick="spSetSeg(0)">整句</button>';
+    segs.forEach(function(s, i){
+      var lab = s.length > 20 ? s.slice(0,19)+"…" : s;
+      h += '<button class="'+(sp.seg===i+1?"on":"")+'" onclick="spSetSeg('+(i+1)+')">'+esc(lab)+'</button>';
+    });
+    h += '</div>';
+    if(sp.seg>0) h += '<div class="note" style="margin-top:8px;text-align:left">本次只读：<b style="color:var(--ink)">'+esc(target)+'</b></div>';
+  }
+
+  var canMic = (eng !== "none") && !(eng === "rec" && window.isSecureContext === false);
+  h += '<button class="sp-mic'+(sp.phase==="rec"?" rec":"")+(canMic?"":" off")+'" onclick="'+(canMic?"spStart()":"")+'">'
+    + (sp.phase==="rec" ? "■" : "🎤")+'</button>';
+
+  if(sp.phase === "rec"){
+    h += '<div class="sp-timer" id="spTimer">0.0 s</div>'
+      + '<div class="sp-state">'+(eng==="asr" ? "正在听…把整句读完（会自动停）" : "正在录…读完点一下红色按钮")+'</div>';
+    if(eng === "rec") h += '<div class="sp-state" style="font-size:11.5px;opacity:.7">读完点一下圆形按钮停止</div>';
+  }else if(sp.phase === "review"){
+    h += '<div class="sp-state">录了 '+sp.durRec.toFixed(1)+' 秒 · 时长匹配 '+sp.timeScore+'%</div>'
+      + '<button class="sp-replay" onclick="spPlayMine()">▶ 回放我的录音</button>'
+      + '<div class="sp-state" style="margin-top:12px">自己觉得像不像？</div>'
+      + '<div class="sp-self">'
+      + '<button class="'+(sp.self===0?"on":"")+'" onclick="spSelf(0)">差得远</button>'
+      + '<button class="'+(sp.self===1?"on":"")+'" onclick="spSelf(1)">还行</button>'
+      + '<button class="'+(sp.self===2?"on":"")+'" onclick="spSelf(2)">很像</button>'
+      + '</div>';
+  }else if(sp.phase === "done"){
+    h += '<div class="sp-result"><div class="sp-score'+(sp.score<55?" low":"")+'">'+sp.score+'<small>分</small></div>'
+      + '<div class="sp-verdict">'+spVerdict(sp.score)+'</div></div>';
+    if(sp.miss.length){
+      h += '<div class="sp-miss">漏读 / 没听清：<b>'+sp.miss.map(function(x){ return esc(x); }).join(" · ")+'</b></div>';
+    }
+    if(sp.heard) h += '<div class="sp-heard">识别结果：'+esc(sp.heard)+'</div>';
+    h += '<div class="dm-act" style="margin-top:14px">'
+      + '<button onclick="spReset()">再录一次</button>'
+      + '<button onclick="spPlayRef(\''+jsq(target)+'\',0.62)">听慢速对照</button>'
+      + '</div>';
+  }else{
+    h += '<div class="sp-state">'+(sp.msg || (canMic ? "先听两遍，再按麦克风把整句说出来" : "这个打开方式不能录音，用 https 网址（如 GitHub Pages）才能用麦克风"))+'</div>';
+  }
+
+  h += '<div class="dm-act" style="margin-top:16px">'
+    + '<button onclick="spPrev()"' + (rd.idx===0 ? " disabled style=\"opacity:.45\"" : "") + '>← 上一句</button>'
+    + '<button onclick="spNext()">下一句 →</button></div>';
+
+  h += '<div class="note" style="margin-top:14px;text-align:left">'
+    + '目标词 <b>'+esc(w.w)+'</b> · '+esc(w.cn)
+    + (hist ? '　|　练过 '+(hist.n||1)+' 次 · 最好 '+hist.best+' 分' : '　|　还没跟读过')
+    + '</div>';
+  h += '</div>';
+
+  h += '<div class="note" style="padding:0 20px 20px">'
+    + '跟读评分只认「词有没有说到、顺序对不对」，不评语调细节。iPhone 上没有网页语音识别，改用时长匹配 + 你自己回放打星；电脑 / 安卓 Chrome 上会自动识别并列出漏读的词。跟读只覆盖 98 个精讲词的原句（5 万词库只有词和释义，没有例句）。'
+    + '</div>';
+  return h;
+}
+
 /* =============== 启动 =============== */
 document.querySelectorAll(".tb").forEach(function(b){
   b.addEventListener("click", function(){
@@ -1714,6 +2301,7 @@ document.querySelectorAll(".tb").forEach(function(b){
 });
 
 function go(t){
+  if(t !== "read") spAbort();
   tab = t;
   document.querySelectorAll(".tb").forEach(function(x){
     x.classList.toggle("active", x.getAttribute("data-tab")===t);
